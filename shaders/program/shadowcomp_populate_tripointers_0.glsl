@@ -1,6 +1,7 @@
 #include "/lib/common.glsl"
-        layout(local_size_x = 64) in;
-#endif
+    
+layout(local_size_x = 64) in;
+
 //layout(local_size_x = 1) in;
 const ivec3 workGroups = ivec3(1, 1, 1);
 

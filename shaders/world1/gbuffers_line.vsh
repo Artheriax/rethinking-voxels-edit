@@ -1,4 +1,4 @@
-#version 430
+#version 430 compatibility
 
 #define VERTEX_SHADER
 #define END

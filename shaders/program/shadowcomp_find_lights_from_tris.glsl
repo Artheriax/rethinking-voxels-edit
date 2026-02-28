@@ -141,7 +141,7 @@ void main() {
                         }
                 }
                 if (detectLightCol) {
-                        lightCol /= max(lightColSamples, 0.0001);
+                        lightCol /= max(0.0001, lightColSamples);
                         lightCol = 0.97 * lightCol + 0.03;
                 }
                 vec3 avg = 0.5 * (upper + lower);
@@ -154,29 +154,18 @@ void main() {
                 light_t thisLight;
                 thisLight.pos = avg;
                 thisLight.size = size;
-                // Safe color clamping to prevent overflow in packed color
-                vec3 safeColor = clamp(lightCol, vec3(0.0), vec3(1.0));
-                thisLight.packedColor = int(255 * safeColor.x + 0.5) + (int(255 * safeColor.y + 0.5) << 8) + (int(255 * safeColor.z + 0.5) << 16);
+                thisLight.packedColor = int(255 * lightCol.x + 0.5) + (int(255 * lightCol.y + 0.5) << 8) + (int(255 * lightCol.z + 0.5) << 16);
                 thisLight.brightnessMat = mat + (lightLevel << 16);
-                
-                // Check capacity BEFORE atomic add to prevent counter overflow
-                int currentCount = numLights;
-                if (currentCount >= MAX_LIGHTS) {
-                        break;
-                }
-                
                 int globalLightId = atomicAdd(numLights, 1);
-                if (globalLightId >= MAX_LIGHTS) {
+                if (globalLightId < MAX_LIGHTS) {
+                        lights[globalLightId] = thisLight;
+                } else {
+                        nLights = i - 1;
                         break;
                 }
-                
-                lights[globalLightId] = thisLight;
-                
                 ivec3 coords = ivec3(thisLight.pos / POINTER_VOLUME_RES + pointerGridSize / 2) / 4;
-                // Safe division with bounds checking
-                int lightRange = max(1, lightLevel / max(1, int(4.01 * POINTER_VOLUME_RES)));
-                ivec3 lowerBound = max(coords - lightRange - 1, ivec3(0));
-                ivec3 upperBound = min(coords + lightRange + 1, pointerGridSize / 4);
+                ivec3 lowerBound = max(coords - lightLevel / int(4.01 * POINTER_VOLUME_RES) - 1, ivec3(0));
+                ivec3 upperBound = min(coords + lightLevel / int(4.01 * POINTER_VOLUME_RES) + 1, pointerGridSize / 4);
                 for (int x = lowerBound.x; x <= upperBound.x; x++) {
                         for (int y = lowerBound.y; y <= upperBound.y; y++) {
                                 for (int z = lowerBound.z; z <= upperBound.z; z++) {

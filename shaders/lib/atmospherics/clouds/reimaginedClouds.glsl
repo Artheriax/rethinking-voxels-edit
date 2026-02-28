@@ -30,7 +30,7 @@ float InterleavedGradientNoise() {
 
         vec3 shadowPosition0 = GetShadowOnCloudPosition(tracePos);
         if (length(shadowPosition0.xy * 2.0 - 1.0) < 1.0) {
-            float shadowsample0 = shadow2D(shadowtex0, shadowPosition0).z;
+            float shadowsample0 = texture(shadowtex0, shadowPosition0);
 
             if (shadowsample0 == 0.0) return true;
         }
@@ -49,7 +49,7 @@ bool GetCloudNoise(vec3 tracePos, float cloudAltitude) {
 }
 
 vec4 GetVolumetricClouds(float cloudAltitude, float distanceThreshold, inout float cloudLinearDepth, float skyFade, float skyMult0, vec3 nPlayerPos, float lViewPosM, float VdotS, float VdotU, float dither) {
-	vec4 volumetricClouds = vec4(0.0);
+    vec4 volumetricClouds = vec4(0.0);
 
     float higherPlaneAltitude = cloudAltitude + cloudStretch;
     float lowerPlaneAltitude  = cloudAltitude - cloudStretch;
@@ -57,7 +57,7 @@ vec4 GetVolumetricClouds(float cloudAltitude, float distanceThreshold, inout flo
     float lowerPlaneDistance  = (lowerPlaneAltitude - cameraPosition.y) / nPlayerPos.y;
     float higherPlaneDistance = (higherPlaneAltitude - cameraPosition.y) / nPlayerPos.y;
     float minPlaneDistance = min(lowerPlaneDistance, higherPlaneDistance);
-          minPlaneDistance = max(minPlaneDistance, 0.0);
+    minPlaneDistance = max(minPlaneDistance, 0.0);
     float maxPlaneDistance = max(lowerPlaneDistance, higherPlaneDistance);
     if (maxPlaneDistance < 0.0) return vec4(0.0);
     float planeDistanceDif = maxPlaneDistance - minPlaneDistance;
