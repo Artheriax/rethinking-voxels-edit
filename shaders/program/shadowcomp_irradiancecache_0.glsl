@@ -20,7 +20,7 @@ uniform vec3 previousCameraPosition;
 vec4 hash44(vec4 p) {
         uvec4 q = uvec4(ivec4(p)) * uvec4(1597334673U, 3812015801U, 2798796415U, 1979697957U);
         q = (q.x ^ q.y ^ q.z ^ q.w) * uvec4(1597334673U, 3812015801U, 2798796415U, 1979697957U);
-        return vec4(q) * (1.0 / 4294967295.0);
+        return vec4(q) / 4294967295.0;
 }
 
 bool getOcclusion(int lightPointer, vec3 pos0) {
@@ -48,9 +48,9 @@ void main() {
         iGlobalInvocationID = // This is a horrible hack that assumes execution order of threads. If the irradiance
                 iGlobalInvocationID * ivec3(greaterThan(camOffset, ivec3(-1))) + // cache breaks in movement on some hardware,
                 (totalSize - iGlobalInvocationID - 1) * ivec3(lessThan(camOffset, ivec3(0))); // investigate this first
-        iGlobalInvocationID = 8 * iGlobalInvocationID + ivec3(7.9 * hash44(vec4(iGlobalInvocationID + 0.5, frameCounter)));
+        iGlobalInvocationID = 8 * iGlobalInvocationID + ivec3(7.9 * hash44(vec4(iGlobalInvocationID + 0.5, 0))); // Use constant seed for stability
         vec3 pos = iGlobalInvocationID - POINTER_VOLUME_RES * pointerGridSize / 2.0;
-        vec4 hash0 = hash44(vec4(pos, frameCounter));
+        vec4 hash0 = hash44(vec4(pos, 0)); // Use constant seed for stability
         pos += 0.5;//0.4 + 0.2 * hash0.xyz;
         ivec3 oldCacheCoord = iGlobalInvocationID + camOffset;
         ivec3 pgc = iGlobalInvocationID / int(POINTER_VOLUME_RES + 0.5) >> 2;
@@ -58,11 +58,18 @@ void main() {
         if (lightCount == 0) return;
         int lightStripLoc = readVolumePointer(pgc, 5) + 1;
         uvec4 occlusionData = readOcclusionVolume(oldCacheCoord);
-        int lightNum = frameCounter % lightCount;
-        if (getOcclusion(readLightPointer(lightStripLoc + lightNum), pos)) {
-                occlusionData[lightNum/32] |= 1u<<(lightNum%32);
-        } else {
-                occlusionData[lightNum/32] &= 0xffffffffu - (1u<<(lightNum%32));
+        
+        // FIX: Update 4 lights per frame instead of 1 to reduce temporal flickering
+        int lightsToUpdate = min(4, lightCount);
+        for (int i = 0; i < lightsToUpdate; i++) {
+                int lightNum = (frameCounter + i) % lightCount;
+                int lightPtr = readLightPointer(lightStripLoc + lightNum);
+                if (lightPtr < 0) continue;
+                if (getOcclusion(lightPtr, pos)) {
+                        occlusionData[lightNum >> 5] |= 1u << (lightNum & 31);
+                } else {
+                        occlusionData[lightNum >> 5] &= ~(1u << (lightNum & 31));
+                }
         }
         writeOcclusionVolume(oldCacheCoord, occlusionData);
 }

@@ -20,7 +20,7 @@ uniform vec3 previousCameraPosition;
 vec4 hash44(vec4 p) {
         uvec4 q = uvec4(ivec4(p)) * uvec4(1597334673U, 3812015801U, 2798796415U, 1979697957U);
         q = (q.x ^ q.y ^ q.z ^ q.w) * uvec4(1597334673U, 3812015801U, 2798796415U, 1979697957U);
-        return vec4(q) * (1.0 / 4294967295.0);
+        return vec4(q) / 4294967295.0;
 }
 
 bool getOcclusion(int lightPointer, vec3 pos0) {
@@ -51,31 +51,42 @@ void main() {
                 referenceCoord * ivec3(greaterThan(camOffset, ivec3(-1))) + // cache breaks in movement on some hardware,
                 (ivec3(16, 8, 16) - referenceCoord - 1) * ivec3(lessThan(camOffset, ivec3(0))); // investigate this first
         referenceCoord = 8 * referenceCoord +
-        ivec3(7.9 * hash44(vec4(referenceCoord + 0.5, frameCounter))) +
+        ivec3(7.9 * hash44(vec4(referenceCoord + 0.5, 0))) + // Use constant seed
         ivec3(8.01 * (floor(0.125 * cameraPosition) - floor(0.125 * previousCameraPosition)));
         ivec3 oldCacheCoord = iGlobalInvocationID + camOffset;
         
         vec3 pos = iGlobalInvocationID - POINTER_VOLUME_RES * pointerGridSize / 2.0;
-        vec4 hash0 = hash44(vec4(pos, frameCounter));
+        vec4 hash0 = hash44(vec4(pos, 0)); // Use constant seed
         pos += 0.5;//0.4 + 0.2 * hash0.xyz;
 
         ivec3 pgc = iGlobalInvocationID / int(POINTER_VOLUME_RES + 0.5) >> 2;
         int lightStripLoc = readVolumePointer(pgc, 5) + 1;
         int lightCount = readVolumePointer(pgc, 4);
         if (lightCount == 0) return;
-        int lightNum = frameCounter % lightCount;
+        
+        // FIX: Update multiple lights per frame for stable temporal response
+        int lightsToUpdate = min(4, lightCount);
         uvec4 referenceData = readOcclusionVolume(referenceCoord);
         uvec4 occlusionData = readOcclusionVolume(oldCacheCoord);
-        if (referenceData[2] == 0) {
-                if ((referenceData[lightNum/32] >> (lightNum%32)) % 2 == 0)
-                        occlusionData[lightNum/32] &= 0xffffffffu - (1u<<(lightNum%32));
-                else
-                        occlusionData[lightNum/32] |= 1u<<(lightNum%32);
-        } else {
-                if (getOcclusion(readLightPointer(lightStripLoc + lightNum), pos)) {
-                        occlusionData[lightNum/32] |= 1u<<(lightNum%32);
+        
+        for (int i = 0; i < lightsToUpdate; i++) {
+                int lightNum = (frameCounter + i) % lightCount;
+                int lightPtr = readLightPointer(lightStripLoc + lightNum);
+                if (lightPtr < 0) continue;
+                
+                if (referenceData[2] == 0) {
+                        // Copy from reference
+                        if ((referenceData[lightNum >> 5] & (1u << (lightNum & 31))) == 0u)
+                                occlusionData[lightNum >> 5] &= ~(1u << (lightNum & 31));
+                        else
+                                occlusionData[lightNum >> 5] |= 1u << (lightNum & 31);
                 } else {
-                        occlusionData[lightNum/32] &= 0xffffffffu - (1u<<(lightNum%32));
+                        // Calculate occlusion directly
+                        if (getOcclusion(lightPtr, pos)) {
+                                occlusionData[lightNum >> 5] |= 1u << (lightNum & 31);
+                        } else {
+                                occlusionData[lightNum >> 5] &= ~(1u << (lightNum & 31));
+                        }
                 }
         }
         writeOcclusionVolume(iGlobalInvocationID, occlusionData);

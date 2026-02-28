@@ -20,7 +20,7 @@ uniform vec3 previousCameraPosition;
 vec4 hash44(vec4 p) {
         uvec4 q = uvec4(ivec4(p)) * uvec4(1597334673U, 3812015801U, 2798796415U, 1979697957U);
         q = (q.x ^ q.y ^ q.z ^ q.w) * uvec4(1597334673U, 3812015801U, 2798796415U, 1979697957U);
-        return vec4(q) * (1.0 / 4294967295.0);
+        return vec4(q) / 4294967295.0;
 }
 
 vec4 getLightCol(int lightPointer, inout vec3 pos0) {
@@ -30,7 +30,7 @@ vec4 getLightCol(int lightPointer, inout vec3 pos0) {
         pos0 = dir;
         float brightness = length(dir);
         float lightBrightness = thisLight.brightnessMat >> 16;
-        brightness = 0.0625 * lightBrightness * pow(max(0.0, 1.0 - brightness / max(lightBrightness, 0.0001)), 2);
+        brightness = 0.0625 * lightBrightness * pow(max(0, 1 - brightness / lightBrightness), 2);
         if (brightness < 0.01) return vec4(0);
         #ifdef ACCURATE_RT
                 ray_hit_t rayHit = betterRayTrace(pos, dir, colortex15);
@@ -40,11 +40,10 @@ vec4 getLightCol(int lightPointer, inout vec3 pos0) {
         vec3 dist = abs(rayHit.pos - thisLight.pos) / (max(thisLight.size, vec3(0.5)) + 0.05);
         if (max(dist.x, max(dist.y, dist.z)) > 1.0) return vec4(0, 0, 0, brightness);
         if (rayHit.transColor.a < 0.1) rayHit.transColor = vec4(1);
-        // Optimized: Use bitwise AND instead of modulo
         return vec4(
-                vec3(thisLight.packedColor & 255,
-                (thisLight.packedColor >> 8) & 255,
-                (thisLight.packedColor >> 16) & 255) / 255.0 * brightness * rayHit.transColor.rgb,
+                vec3(thisLight.packedColor % 256,
+                (thisLight.packedColor >> 8) % 256,
+                (thisLight.packedColor >> 16) % 256) / 255.0 * brightness * rayHit.transColor.rgb,
                 brightness);
 }
 
@@ -60,7 +59,7 @@ void main() {
                 iGlobalInvocationID * ivec3(greaterThan(camOffset, ivec3(-1))) + // cache breaks in movement on some hardware,
                 (totalSize - iGlobalInvocationID - 1) * ivec3(lessThan(camOffset, ivec3(0))); // investigate this first
         vec3 pos = iGlobalInvocationID - POINTER_VOLUME_RES * pointerGridSize / 2.0;
-        vec4 hash0 = hash44(vec4(pos, frameCounter));
+        vec4 hash0 = hash44(vec4(pos, 0)); // Use constant seed for stability
         pos += 0.5;//0.4 + 0.2 * hash0.xyz;
         ivec3 oldCacheCoord = iGlobalInvocationID + camOffset;
         ivec3 pgc = iGlobalInvocationID / int(POINTER_VOLUME_RES + 0.5) >> 2;
@@ -69,31 +68,27 @@ void main() {
                 int lightStripLoc = readVolumePointer(pgc, 5) + 1;
                 int lightNum = int(gl_LocalInvocationID.x) + 8 * int(gl_LocalInvocationID.y);
                 if (lightNum < lightCount) {
-                        int ptr = readLightPointer(lightStripLoc + lightNum);
-                        if (ptr >= 0) {
-                                light_t thisLight = lights[ptr];
-                                lightPositions[lightNum] = thisLight.pos;
-                                // Optimized: Use bitwise AND instead of modulo
-                                lightCols[lightNum] = vec4(
-                                        thisLight.packedColor & 255,
-                                        (thisLight.packedColor >> 8) & 255,
-                                        (thisLight.packedColor >> 16) & 255,
-                                        thisLight.brightnessMat >> 16) / vec4(255, 255, 255, 1);
-                        }
+                        light_t thisLight = lights[readLightPointer(lightStripLoc + lightNum)];
+                        lightPositions[lightNum] = thisLight.pos;
+                        lightCols[lightNum] = vec4(
+                                thisLight.packedColor % 256,
+                                (thisLight.packedColor >> 8) % 256,
+                                (thisLight.packedColor >> 16) % 256,
+                                thisLight.brightnessMat >> 16) / vec4(255, 255, 255, 1);
                 }
         }
         barrier();
         groupMemoryBarrier();
         uvec4 occlusionData = readOcclusionVolume(iGlobalInvocationID);
-        bool doLighting = (frameCounter + gl_WorkGroupID.x + gl_WorkGroupID.y + gl_WorkGroupID.z) % 10 == 0;
+        // FIX: Update more frequently (1/4 instead of 1/10) to reduce flickering
+        bool doLighting = (frameCounter + gl_WorkGroupID.x + gl_WorkGroupID.y + gl_WorkGroupID.z) % 4 == 0;
         vec4 irrCacheData[7];
         for (int k = 0; k < 7; k++) irrCacheData[k] = vec4(0);
         if (doLighting) {
                 for (int n = 0; n < lightCount; n++) {
-                        // Optimized: Use bitwise operations for bit extraction
-                        if ((occlusionData[n >> 5] & (1u << (n & 31))) == 0u) continue;
+                        if ((occlusionData[n/32] >> (n%32)) % 2 == 0) continue;
                         vec3 dir = lightPositions[n] - pos;
-                        float brightness = 0.0625 * lightCols[n].a * pow(max(0.0, 1.0 - length(dir) / max(lightCols[n].a, 0.0001)), 2);
+                        float brightness = 0.0625 * lightCols[n].a * pow(max(0, 1 - length(dir) / lightCols[n].a), 2);
                         if (brightness > 0.01) {
                                 vec4 thisAdjustedCol = vec4(lightCols[n].xyz, 1) * brightness;
                                 irrCacheData[6] += thisAdjustedCol;
@@ -109,10 +104,8 @@ void main() {
                         }
                 }
                 float lightLen = max(max(irrCacheData[6].x, irrCacheData[6].y), irrCacheData[6].z);
-                // Safe division with proper epsilon
-                float logScale = 3.0 * log(max(lightLen, 0.0001) / 3.0 + 1.0) / max(lightLen, 0.0001);
                 for (int k = 0; k < 7; k++) {
-                        irrCacheData[k] *= logScale;
+                        irrCacheData[k] *= 3 * log(lightLen / 3.0 + 1) / (lightLen + 0.0001);
                 }
         } else {
                 for (int k = 0; k < 7; k++) irrCacheData[k] = readIrradianceCache(oldCacheCoord, k);
