@@ -20,7 +20,7 @@ uniform vec3 previousCameraPosition;
 vec4 hash44(vec4 p) {
         uvec4 q = uvec4(ivec4(p)) * uvec4(1597334673U, 3812015801U, 2798796415U, 1979697957U);
         q = (q.x ^ q.y ^ q.z ^ q.w) * uvec4(1597334673U, 3812015801U, 2798796415U, 1979697957U);
-        return vec4(q) / 4294967295.0;
+        return vec4(q) * (1.0 / 4294967295.0);
 }
 
 shared int visibility;

@@ -14,6 +14,9 @@
 #endif
 
 const ivec3 pointerGridSize = ivec3(64, 32, 64);
+
+// Precomputed voxel bounds for efficient range checking
+const vec3 VX_BOUNDS_HALF = POINTER_VOLUME_RES * pointerGridSize * 0.5;
 const int maxStripIndex = MAX_TRIS + pointerGridSize.x * pointerGridSize.y * pointerGridSize.z;
 struct tri_t {
         uint matBools;

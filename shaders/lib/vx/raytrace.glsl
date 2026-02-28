@@ -177,14 +177,10 @@
                                 progress[i] = dir[i] == 0 ? 10 : (-(dir[i] < 0 ? fract(pos0[i]) : fract(pos0[i]) - 1) / dir[i]);
                         }
                         int i = 0;
-                        // get closest starting position
+                        // get closest starting position (manual unroll for efficiency)
                         float w = progress[0];
-                        for (int i0 = 1; i0 < 3; i0++) {
-                                if (progress[i0] < w) {
-                                        i = i0;
-                                        w = progress[i];
-                                }
-                        }
+                        if (progress[1] < w) { i = 1; w = progress[1]; }
+                        if (progress[2] < w) { i = 2; w = progress[2]; }
                         // step size in each direction (to keep to the voxel grid)
                         vec3 stp = 1 / max(abs(dir), 0.00001);
                         float dirlen = max(length(dir), 0.0001);
@@ -205,8 +201,8 @@
                                 returnVal.rayColor = vec4(0, 0, 0, 1);
                                 return returnVal;
                         }
-                        if (all(greaterThan(pos, -pointerGridSize * POINTER_VOLUME_RES / 2.0)) &&
-                                all(lessThan(pos, pointerGridSize * POINTER_VOLUME_RES / 2.0)) &&
+                        if (all(greaterThan(pos, -VX_BOUNDS_HALF)) &&
+                                all(lessThan(pos, VX_BOUNDS_HALF)) &&
                                 voxeldata.trace &&
                                 !lowDetail
                         ) {
@@ -233,7 +229,7 @@
                                 oldRayColor = rayColor;
                                 pos = pos0 + (min(w, 1.0)) * dir + eyeOffsets[i];
                                 // read voxel data at new position and update ray colour accordingly
-                                if (all(greaterThan(pos, -pointerGridSize * POINTER_VOLUME_RES / 2.0)) && all(lessThan(pos, pointerGridSize * POINTER_VOLUME_RES / 2.0))) {
+                                if (all(greaterThan(pos, -VX_BOUNDS_HALF)) && all(lessThan(pos, VX_BOUNDS_HALF))) {
                                         wasInRange = true;
                                         voxeldata = readVxMap(pos);
                                         pos -= eyeOffsets[i];
@@ -277,14 +273,11 @@
                                 }
                                 // update position
                                 progress[i] += stp[i];
+                                // Manual unroll of 3-iteration min-finding loop (more efficient than loop)
                                 w = progress[0];
                                 i = 0;
-                                for (int i0 = 1; i0 < 3; i0++) {
-                                        if (progress[i0] < w) {
-                                                i = i0;
-                                                w = progress[i];
-                                        }
-                                }
+                                if (progress[1] < w) { i = 1; w = progress[1]; }
+                                if (progress[2] < w) { i = 2; w = progress[2]; }
                                 k++;
                         }
                         float oldAlpha = rayColor.a;
@@ -511,14 +504,11 @@
                                         }
                                 } else if (wasInRange) break;
                                 progress[i] += stp[i];
+                                // Manual unroll of 3-iteration min-finding loop
                                 w = progress[0];
                                 i = 0;
-                                for (int i0 = 1; i0 < 3; i0++) {
-                                        if (progress[i0] < w) {
-                                                i = i0;
-                                                w = progress[i];
-                                        }
-                                }
+                                if (progress[1] < w) { i = 1; w = progress[1]; }
+                                if (progress[2] < w) { i = 2; w = progress[2]; }
                         }
                         if (rayColor.a < 0.999) {
                                 returnVal.pos = pos0 + dir;
