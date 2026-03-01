@@ -229,9 +229,8 @@ void main() {
             vec3 playerLightPos = floor(playerVxPos) + 0.5;
             
             // Use torch color settings - these can be customized in shader options
-            int heldMat = heldBlockLightValue > 0 ? heldItemId : heldItemId2;
-            vec3 handheldLightCol = getLightCol(heldMat);
-            float handheldBrightness = float(getLightLevel(heldMat));
+            vec3 handheldLightCol = vec3(TORCH_COL_R, TORCH_COL_G, TORCH_COL_B);
+            float handheldBrightness = BRIGHTNESS_TORCH;
             #if HELD_LIGHTING_MODE == 1
                 handheldBrightness *= 0.5;
             #endif
