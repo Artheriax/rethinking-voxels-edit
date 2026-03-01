@@ -193,6 +193,36 @@ void registerLight(ivec3 lightCoord, vec3 referencePos, float weight) {
     }
 }
 
+#if HELD_LIGHTING_MODE > 0
+void injectHeldLight(vec3 referencePos) {
+    vec3 fractCamPos = cameraPositionInt.y == -98257195 ? fract(cameraPosition) : cameraPositionFract;
+    vec3 playerVxPos = fractCamPos - relativeEyePosition + vec3(0.0, 0.5, 0.0);
+    ivec3 lightCoord = ivec3(floor(playerVxPos));
+
+    uint hash = posToHash(lightCoord) % uint(128*32);
+    bool known = (atomicOr(lightHashMap[hash/32], uint(1)<<hash%32) & uint(1)<<hash%32) != 0;
+    if (known) return;
+
+    int lightIndex = atomicAdd(lightCount, 1);
+    if (lightIndex >= MAX_LIGHT_COUNT) { atomicMin(lightCount, MAX_LIGHT_COUNT); return; }
+
+    float brightness = max(float(heldBlockLightValue), float(heldBlockLightValue2)) / 15.0;
+    vec3 lightCol = vec3(brightness);
+    float traceFraction = 0.5;
+    vec3 lightWorldPos = vec3(lightCoord) + vec3(0.5);
+    vec3 dir = lightWorldPos - referencePos;
+    float dirLen = length(dir);
+
+    lightCoords[lightIndex] = ivec4(lightCoord, lightIndex);
+    weights[lightIndex] = length(lightCol) *
+        distanceFalloff(dirLen / (traceFraction * LIGHT_TRACE_LENGTH)) *
+        1.5*1.5*traceFraction*traceFraction * 2.0;
+    lightPositions[lightIndex] = lightWorldPos;
+    lightCols[lightIndex] = lightCol;
+    extraData[lightIndex] = int(traceFraction * 32.0 + 0.5) << 17;
+}
+#endif
+
 void main() {
     int index = int(gl_LocalInvocationIndex);
     float dither = nextFloat();
@@ -273,16 +303,11 @@ void main() {
     }
 
     // Handheld light search - search around player's position
+    // FIX: Removed anyInFrustrum check - search EVERY frame for handheld lights
+    // FIX: Expanded to 7x7x7 area and added eye height offset for better coverage
     #if HELD_LIGHTING_MODE > 0
-        if (index < 125 && anyInFrustrum && (heldBlockLightValue > 0 || heldBlockLightValue2 > 0)) {
-            vec3 fractCamPos = cameraPositionInt.y == -98257195 ? fract(cameraPosition) : cameraPositionFract;
-            vec3 playerVxPos = fractCamPos - relativeEyePosition;
-            ivec3 playerVoxelCenter = ivec3(floor(playerVxPos));
-            
-            // Search 5x5x5 area around player position for the handheld light
-            ivec3 offset = ivec3(index%5, index/5%5, index/25%5) - 2;
-            ivec3 lightPos0 = playerVoxelCenter + offset;
-            registerLight(lightPos0, meanPos, 0.0);
+        if (index == 0 && (heldBlockLightValue > 0 || heldBlockLightValue2 > 0)) {
+            injectHeldLight(meanPos);
         }
     #endif
 

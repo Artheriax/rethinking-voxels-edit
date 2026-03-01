@@ -177,6 +177,40 @@ void registerLight(ivec3 lightCoord, vec3 referencePos, vec3 referenceNormal, fl
     }
 }
 
+// FIX: Dedicated function for handheld lights with forced registration
+void injectHeldLight(vec3 referencePos, vec3 referenceNormal) {
+    // Use a single stable position: floor of player feet, no cnormal bias
+    vec3 playerVxPos = fractCamPos - relativeEyePosition + vec3(0.0, 0.5, 0.0);
+    ivec3 lightCoord = ivec3(floor(playerVxPos));
+
+    uint hash = posToHash(lightCoord) % uint(128*32);
+    bool known = (atomicOr(lightHashMap[hash/32], uint(1)<<hash%32) & uint(1)<<hash%32) != 0;
+    if (known) return;
+
+    int lightIndex = atomicAdd(lightCount, 1);
+    if (lightIndex >= MAX_LIGHT_COUNT) { atomicMin(lightCount, MAX_LIGHT_COUNT); return; }
+
+    // Derive color from heldBlockLightValue (15 = full brightness white)
+    float brightness = max(heldBlockLightValue, heldBlockLightValue2) / 15.0;
+    vec3 lightCol = vec3(brightness); // white; tint here if desired
+
+    float traceFraction = 0.5; // mid-range falloff
+    vec3 subLightPos = vec3(0.5);
+    vec3 lightWorldPos = lightCoord + subLightPos;
+    vec3 dir = lightWorldPos - referencePos;
+    float dirLen = length(dir);
+
+    lightCoords[lightIndex] = ivec4(lightCoord, lightIndex);
+    weights[lightIndex] = length(lightCol) *
+        max(0.0, dot(normalize(dir), referenceNormal)) *
+        distanceFalloff(dirLen / (traceFraction * LIGHT_TRACE_LENGTH)) *
+        1.5*1.5*traceFraction*traceFraction * 2.0;
+    lightPositions[lightIndex] = lightWorldPos;
+    lightCols[lightIndex] = lightCol;
+    // Pack traceLen into extraData bits 17-21, same encoding as normal lights
+    extraData[lightIndex] = int(traceFraction * 32.0 + 0.5) << 17;
+}
+
 void main() {
     int index = int(gl_LocalInvocationID.x + gl_WorkGroupSize.x * gl_LocalInvocationID.y);
     float dither = nextFloat();
@@ -311,18 +345,12 @@ void main() {
     }
 
     // Handheld light search - search around player's position
+    // FIX: Search EVERY FRAME regardless of other conditions, use dedicated registration
     #if HELD_LIGHTING_MODE > 0
-        if (index < 125 && (heldBlockLightValue > 0 || heldBlockLightValue2 > 0)) {
-            vec3 playerVxPos = fractCamPos - relativeEyePosition;
-            ivec3 playerVoxelCenter = ivec3(floor(playerVxPos));
-            
-            // Search 5x5x5 area around player position for the handheld light
-            ivec3 offset = ivec3(index%5, index/5%5, index/25%5) - 2;
-            ivec3 lightPos0 = playerVoxelCenter + offset;
-            registerLight(lightPos0, meanPos, meanNormal, 0.0);
+        if (index == 0 && (heldBlockLightValue > 0 || heldBlockLightValue2 > 0)) {
+            injectHeldLight(meanPos, meanNormal);
         }
     #endif
-
     if (index < 8 * MAX_LIGHT_COUNT) {
         ivec2 offset = (1 + index%8/4*3) * (index%4/2*2-1) * ivec2(index%2, (index+1)%2);
         int otherLightIndex = index / 8;

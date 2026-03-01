@@ -231,7 +231,7 @@ void main() {
 
 #endif
 
-/////////Geometry Shader////////Geometry Shader////////Geometry Shader/////////
+///////Geometry Shader////////Geometry Shader////////Geometry Shader/////////
 #ifdef GEOMETRY_SHADER
 
 layout(triangles) in;
@@ -311,14 +311,20 @@ void main() {
         if (entityId == 50016 && emissive && length(center - floorCamPosRelEyePos) < 3) { // handheld item
             isHeldLight = true;
             #ifdef PLAYER_VOXELIZATION
-                vec3 offset = vec3(0.5 * (center.xz - floorCamPosRelEyePos.xz), 0).xzy;
+                // FIX: Use a stable, predictable position for handheld lights
+                // This prevents flickering caused by geometry-dependent positions
+                vec3 stablePlayerPos = floorCamPosRelEyePos + vec3(0.0, 0.5, 0.0);
+                center = stablePlayerPos; // No floor() - continuous position
+                for (int i = 0; i < 3; i++) {
+                    vxPos[i] = center;
+                }
             #else
                 vec3 offset = -0.8 * (center - floorCamPosRelEyePos);
+                center += offset;
+                for (int i = 0; i < 3; i++) {
+                    vxPos[i] += offset;
+                }
             #endif
-            center += offset;
-            for (int i = 0; i < 3; i++) {
-                vxPos[i] += offset;
-            }
         }
         vec3 lowerBound = floor(min(min(vxPos[0], vxPos[1]), vxPos[2]));
         int bestNormalAxis = int(dot(vec3(greaterThanEqual(abs(cnormal), max(abs(cnormal).yzx, abs(cnormal.zxy)))), vec3(0.5, 1.5, 2.5)));
@@ -493,10 +499,18 @@ void main() {
                 uint(col.x * 32 + 0.5) | (uint(col.y * 32 + 0.5) << 16),
                 uint(col.z * 32 + 0.5)
             );
-            atomicAdd(globalLightHashMap[hash*4], packedMeanPos.x);
-            atomicAdd(globalLightHashMap[hash*4+1], packedMeanPos.y);
-            atomicAdd(globalLightHashMap[hash*4+2], packedCol2.x);
-            atomicAdd(globalLightHashMap[hash*4+3], packedCol2.y);
+            // FIX: Use atomicExchange for handheld lights to prevent accumulation flickering
+            if (isHeldLight) {
+                atomicExchange(globalLightHashMap[hash*4], packedMeanPos.x);
+                atomicExchange(globalLightHashMap[hash*4+1], packedMeanPos.y);
+                atomicExchange(globalLightHashMap[hash*4+2], packedCol2.x);
+                atomicExchange(globalLightHashMap[hash*4+3], packedCol2.y);
+            } else {
+                atomicAdd(globalLightHashMap[hash*4], packedMeanPos.x);
+                atomicAdd(globalLightHashMap[hash*4+1], packedMeanPos.y);
+                atomicAdd(globalLightHashMap[hash*4+2], packedCol2.x);
+                atomicAdd(globalLightHashMap[hash*4+3], packedCol2.y);
+            }
             if ((imageAtomicOr(occupancyVolume, coords, 1<<16) >> 16 & 1) == 0) {
                 int lightLevel = getLightLevel(localMat);
                 #if HELD_LIGHTING_MODE == 1
