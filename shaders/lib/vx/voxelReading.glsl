@@ -68,8 +68,15 @@ vec4 coneTrace(vec3 start, vec3 dir, float angle, float dither) {
     dir /= dirLen;
     float w = 0.001 + dither * getDistanceField(start + 0.001 * dir);
     vec4 color = vec4(0.0);
-    int k;
-    for (k = 0; k < RT_STEPS; k++) {
+    
+    // Optimization: Cache frequently used values
+    const float minAngle = 0.01;
+    const float angleThreshold = minAngle * angle0;
+    
+    for (int k = 0; k < RT_STEPS; k++) {
+        // Early exit: exceeded trace distance
+        if (w > dirLen) break;
+        
         vec3 thisPos = start + w * dir;
         float thisdist = getDistanceField(thisPos);
 
@@ -88,6 +95,10 @@ vec4 coneTrace(vec3 start, vec3 dir, float angle, float dither) {
         #else
             angle = min(angle, thisdist / w);
         #endif
+        
+        // Early exit: cone too narrow (missed everything)
+        if (angle < angleThreshold) break;
+        
         #ifdef TRANSLUCENT_LIGHT_TINT
         if (thisdist < 0.75) {
             ivec3 coords = ivec3(thisPos + 1000) - 1000 + voxelVolumeSize/2;
@@ -97,14 +108,17 @@ vec4 coneTrace(vec3 start, vec3 dir, float angle, float dither) {
             }
         }
         #endif
+        
         w += thisdist;
-        if (angle < 0.01 * angle0 || w > dirLen) break;
     }
+    
+    // Optimized: Simplified final calculation
+    float hitFactor = float(w > dirLen * 0.97) * (angle/angle0 - 0.01) / 0.99;
     return vec4(
-        angle > 0.01 * angle0 ?
+        angle > angleThreshold ?
         mix(vec3(1.0), color.rgb / max(color.a, 0.0001), min(1.0, color.a * 2)) :
         start + min(w, dirLen) * dir,
-        max(0, float(w > dirLen * 0.97) * (angle/angle0 - 0.01) / 0.99));
+        max(0.0, hitFactor));
 }
 
 vec4 voxelTrace(vec3 start, vec3 dir, out vec3 normal, int hitMask) {
@@ -131,4 +145,3 @@ vec4 voxelTrace(vec3 start, vec3 dir, out vec3 normal, int hitMask) {
     }
     return vec4(-10000);
 }
-

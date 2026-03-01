@@ -512,9 +512,9 @@ void main() {
                         translucentCol.xyz = mix(vec3(1), translucentCol.xyz, translucentCol.w);
                     }
                     #ifdef GL_CAVE_FACTOR
-                        vec3 ambientHitCol = AMBIENT_MULT * 0.25 * skyLight * ambientColor * clamp(dir.y + 1.6, 0.6, 1) * (1-GetCaveFactor(cameraPosition.y + vxPos.y)) / GI_STRENGTH;
+                        vec3 ambientHitCol = AMBIENT_MULT * 0.25 * skyLight * ambientColor * clamp(dir.y + 1.6, 0.6, 1.0) * (1-GetCaveFactor(cameraPosition.y + vxPos.y)) / GI_STRENGTH;
                     #else
-                        vec3 ambientHitCol = AMBIENT_MULT * 0.25 * skyLight * ambientColor * clamp(dir.y + 1.6, 0.6, 1) / GI_STRENGTH;
+                        vec3 ambientHitCol = AMBIENT_MULT * 0.25 * skyLight * ambientColor * clamp(dir.y + 1.6, 0.6, 1.0) / GI_STRENGTH;
                     #endif
                     vec3 hitCol = vec3(0);
                     if (length(hitPos - vxPos) < LIGHT_TRACE_LENGTH - 0.5 && infnorm(hitPos / voxelVolumeSize) < 0.5) {

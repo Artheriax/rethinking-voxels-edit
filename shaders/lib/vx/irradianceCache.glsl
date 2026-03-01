@@ -1,31 +1,47 @@
 #ifndef IRRADIANCECACHE
 #define IRRADIANCECACHE
+
+// Optimized: Inline bounds check for better performance
 bool isInRange(vec3 vxPos) {
-    return all(greaterThan(vxPos, -0.5*voxelVolumeSize)) && all(lessThan(vxPos, 0.5*voxelVolumeSize));
+    vec3 halfVolume = 0.5 * vec3(voxelVolumeSize);
+    return all(greaterThan(vxPos, -halfVolume)) && all(lessThan(vxPos, halfVolume));
 }
 
 uniform sampler3D irradianceCache;
 
 vec3 readIrradianceCache(vec3 vxPos, vec3 normal) {
+    // Early exit for out-of-range positions
     if (!isInRange(vxPos)) return vec3(0);
-    vxPos = ((vxPos + 0.5 * normal) / voxelVolumeSize + 0.5) * vec3(1.0, 0.5, 1.0);
-    vec4 color = textureLod(irradianceCache, vxPos, 0);
+    
+    // Optimized: Combined coordinate calculation
+    vec3 samplePos = ((vxPos + 0.5 * normal) / voxelVolumeSize + 0.5) * vec3(1.0, 0.5, 1.0);
+    vec4 color = textureLod(irradianceCache, samplePos, 0);
     return color.rgb / max(color.a, 0.0001);
 }
 
 vec3 readSurfaceVoxelBlocklight(vec3 vxPos, vec3 normal) {
+    // Early exit for out-of-range positions
     if (!isInRange(vxPos)) return vec3(0);
-    vxPos = ((vxPos + 0.5 * normal) / voxelVolumeSize + vec3(0.5, 1.5, 0.5)) * vec3(1.0, 0.5, 1.0);
-    vec4 color = textureLod(irradianceCache, vxPos, 0);
+    
+    // Optimized: Combined coordinate calculation with Y offset for surface reading
+    vec3 samplePos = ((vxPos + 0.5 * normal) / voxelVolumeSize + vec3(0.5, 1.5, 0.5)) * vec3(1.0, 0.5, 1.0);
+    vec4 color = textureLod(irradianceCache, samplePos, 0);
+    
+    // Optimized: Only apply tone mapping if there's significant light
     float lColor = length(color.rgb);
-    if (lColor > 0.01) color.rgb *= log(lColor + 1) / lColor;
+    if (lColor > 0.01) {
+        color.rgb *= log(lColor + 1.0) / lColor;
+    }
     return color.rgb;
 }
 
 vec3 readVolumetricBlocklight(vec3 vxPos) {
+    // Early exit for out-of-range positions
     if (!isInRange(vxPos)) return vec3(0);
-    vxPos = (vxPos / voxelVolumeSize + vec3(0.5, 1.5, 0.5)) * vec3(1.0, 0.5, 1.0);
-    vec4 color = textureLod(irradianceCache, vxPos, 0);
+    
+    // Optimized: Direct coordinate calculation for volumetric reading
+    vec3 samplePos = (vxPos / voxelVolumeSize + vec3(0.5, 1.5, 0.5)) * vec3(1.0, 0.5, 1.0);
+    vec4 color = textureLod(irradianceCache, samplePos, 0);
     return color.rgb / max(color.a, 0.0001);
 }
 #endif
