@@ -73,6 +73,7 @@ layout(rgba16i) uniform iimage3D lightStorage;
 #include "/lib/vx/voxelReading.glsl"
 #include "/lib/util/random.glsl"
 #include "/lib/vx/positionHashing.glsl"
+#include "/lib/materials/lightColorSettings.glsl"
 
 #if MAX_TRACE_COUNT < 128
     #define MAX_LIGHT_COUNT 128
@@ -201,12 +202,49 @@ void main() {
         frustrumSides[index] = pos.xyz * pos.w;
     } else if (index == 4) {
         frustrumSides[4] = -normalize(gbufferModelViewInverse[2].xyz);
-        lightCount = 0;
+        #if HELD_LIGHTING_MODE > 0
+            // Only reserve index 0 for handheld light if actually holding a light-emitting item
+            if (heldBlockLightValue > 0 || heldBlockLightValue2 > 0) {
+                lightCount = 1;
+            } else {
+                lightCount = 0;
+            }
+        #else
+            lightCount = 0;
+        #endif
         anyInFrustrum = false;
     }
     if (index < 128) {
         lightHashMap[index] = 0;
     }
+    #if HELD_LIGHTING_MODE > 0
+        // Initialize handheld light at index 0 early - before any other registrations
+        // Only if player is holding a light-emitting item
+        if (index == 0 && (heldBlockLightValue > 0 || heldBlockLightValue2 > 0)) {
+            vec3 fractCamPos = cameraPositionInt.y == -98257195 ? fract(cameraPosition) : cameraPositionFract;
+            vec3 playerVxPos = fractCamPos - relativeEyePosition;
+            
+            // Use stable position - snap to center of current voxel for consistency
+            // This prevents flickering when player crosses voxel boundaries
+            vec3 playerLightPos = floor(playerVxPos) + 0.5;
+            
+            // Use torch color settings - these can be customized in shader options
+            int heldMat = heldBlockLightValue > 0 ? heldItemId : heldItemId2;
+            vec3 handheldLightCol = getLightCol(heldMat);
+            float handheldBrightness = float(getLightLevel(heldMat));
+            #if HELD_LIGHTING_MODE == 1
+                handheldBrightness *= 0.5;
+            #endif
+            
+            float thisTraceLen = handheldBrightness / 31.0;
+            
+            lightCoords[0] = ivec4(ivec3(playerLightPos), 0);
+            lightPositions[0] = playerLightPos;
+            lightCols[0] = handheldLightCol;
+            extraData[0] = int(handheldBrightness) << 17;
+            weights[0] = length(handheldLightCol) * 1.5 * 1.5 * thisTraceLen * thisTraceLen;
+        }
+    #endif
     barrier();
     memoryBarrierShared();
     vec3 sideNormal = vec3(0);
@@ -271,17 +309,8 @@ void main() {
         }
     }
 
-    #if HELD_LIGHTING_MODE > 0
-        if (index < 125 && anyInFrustrum) {
-            // Calculate player's voxel position for handheld lighting
-            vec3 fractCamPos = cameraPositionInt.y == -98257195 ? fract(cameraPosition) : cameraPositionFract;
-            vec3 playerVxPos = fractCamPos - relativeEyePosition;
-            ivec3 playerVxCoord = ivec3(playerVxPos + 0.5 * voxelVolumeSize);
-            // Register lights in a 5x5x5 grid around the player
-            ivec3 lightPos0 = playerVxCoord + ivec3(index%5, index/5%5, index/25%5) - 2;
-            registerLight(lightPos0, playerVxPos, 0.0);
-        }
-    #endif
+    // Handheld light is now initialized at index 0 before barrier
+    // No need to search for it with registerLight
     barrier();
     memoryBarrierShared();
     bool participateInSorting = index < MAX_LIGHT_COUNT/2;
@@ -487,10 +516,7 @@ void main() {
                 maxDFVal = max(max(dplus, dminus), maxDFVal);
             }
             normal = normalize(normal);
-            // Enhanced NaN/Inf protection for normal
-            if (any(isnan(normal)) || any(isinf(normal)) || length(normal) < 0.5) {
-                normal = vec3(0);
-            }
+            if (any(isnan(normal))) normal = vec3(0);
             if (maxDFVal > 0.1 && length(normal) > 0.5) {
                 vec4 GILight = imageLoad(irradianceCacheI, coords);
                 float weight = 1.0;
