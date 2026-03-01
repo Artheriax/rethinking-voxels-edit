@@ -7,6 +7,8 @@ bool isEmissive(int mat) {
         mat == 10076 || // soul fire
         mat == 10216 || // crimson wood
         mat == 10224 || // warped wood
+        // Handheld light items (44XXX range)
+        (mat >= 44002 && mat <= 44041) || // torch, end_rod, beacon, froglights, glowstone, etc.
 #ifdef GLOWING_ORE_IRON
         mat == 10272 || // iron ore
         mat == 10276 ||
@@ -135,6 +137,133 @@ vec3 getLightCol(int mat) {
         case 10996: // light block
             lightcol = blocklightCol;
             break;
+        // Handheld light items (44XXX range) - map to corresponding block colors
+        case 44002: // torch
+            #ifdef HARDCODED_TORCH_COL
+            lightcol = vec3(TORCH_COL_R, TORCH_COL_G, TORCH_COL_B);
+            #endif
+            break;
+        case 44003: // end rod
+            #ifdef HARDCODED_ENDROD_COL
+            lightcol = vec3(ENDROD_COL_R, ENDROD_COL_G, ENDROD_COL_B);
+            #endif
+            break;
+        case 44004: // beacon
+            #ifdef HARDCODED_BEACON_COL
+            lightcol = vec3(BEACON_COL_R, BEACON_COL_G, BEACON_COL_B);
+            #endif
+            break;
+        case 44007: // ochre froglight
+            #ifdef HARDCODED_YELLOWFROG_COL
+            lightcol = vec3(YELLOWFROG_COL_R, YELLOWFROG_COL_G, YELLOWFROG_COL_B);
+            #endif
+            break;
+        case 44008: // verdant froglight
+            #ifdef HARDCODED_GREENFROG_COL
+            lightcol = vec3(GREENFROG_COL_R, GREENFROG_COL_G, GREENFROG_COL_B);
+            #endif
+            break;
+        case 44009: // pearlescent froglight
+            #ifdef HARDCODED_PINKFROG_COL
+            lightcol = vec3(PINKFROG_COL_R, PINKFROG_COL_G, PINKFROG_COL_B);
+            #endif
+            break;
+        case 44010: // glowstone
+            #ifdef HARDCODED_GLOWSTONE_COL
+            lightcol = vec3(GLOWSTONE_COL_R, GLOWSTONE_COL_G, GLOWSTONE_COL_B);
+            #endif
+            break;
+        case 44011: // jack o'lantern
+            #ifdef HARDCODED_PUMPKIN_COL
+            lightcol = vec3(PUMPKIN_COL_R, PUMPKIN_COL_G, PUMPKIN_COL_B);
+            #endif
+            break;
+        case 44012: // lantern
+            #ifdef LANTERN_HARDCODED_TORCH_COL
+            lightcol = vec3(TORCH_COL_R, TORCH_COL_G, TORCH_COL_B);
+            #endif
+            break;
+        case 44015: // campfire
+            #ifdef CAMPFIRE_HARDCODED_FIRE_COL
+            lightcol = vec3(FIRE_COL_R, FIRE_COL_G, FIRE_COL_B);
+            #endif
+            break;
+        case 44018: // sea lantern
+            #ifdef HARDCODED_SEALANTERN_COL
+            lightcol = vec3(SEALANTERN_COL_R, SEALANTERN_COL_G, SEALANTERN_COL_B);
+            #endif
+            break;
+        case 44019: // shroomlight
+            #ifdef HARDCODED_SHROOMLIGHT_COL
+            lightcol = vec3(SHROOMLIGHT_COL_R, SHROOMLIGHT_COL_G, SHROOMLIGHT_COL_B);
+            #endif
+            break;
+        case 44026: // crying obsidian
+            #ifdef HARDCODED_CRYING_COL
+            lightcol = vec3(CRYING_COL_R, CRYING_COL_G, CRYING_COL_B);
+            #endif
+            break;
+        case 44028: // soul torch
+            #ifdef HARDCODED_SOULTORCH_COL
+            lightcol = vec3(SOULTORCH_COL_R, SOULTORCH_COL_G, SOULTORCH_COL_B);
+            #endif
+            break;
+        case 44029: // soul lantern
+            #ifdef LANTERN_HARDCODED_SOULTORCH_COL
+            lightcol = vec3(SOULTORCH_COL_R, SOULTORCH_COL_G, SOULTORCH_COL_B);
+            #endif
+            break;
+        case 44030: // soul campfire
+            #ifdef CAMPFIRE_HARDCODED_SOULFIRE_COL
+            lightcol = vec3(SOULFIRE_COL_R, SOULFIRE_COL_G, SOULFIRE_COL_B);
+            #endif
+            break;
+        case 44033: // enchanting table
+            #ifdef HARDCODED_TABLE_COL
+            lightcol = vec3(TABLE_COL_R, TABLE_COL_G, TABLE_COL_B);
+            #endif
+            break;
+        case 44034: // glow lichen
+            #ifdef HARDCODED_LICHEN_COL
+            lightcol = vec3(LICHEN_COL_R, LICHEN_COL_G, LICHEN_COL_B);
+            #endif
+            break;
+        case 44035: // redstone torch
+            #ifdef TORCH_HARDCODED_REDSTONE_COL
+            lightcol = vec3(REDSTONE_COL_R, REDSTONE_COL_G, REDSTONE_COL_B);
+            #endif
+            break;
+        case 44036: // amethyst buds
+            #ifdef HARDCODED_AMETHYST_COL
+            lightcol = vec3(AMETHYST_COL_R, AMETHYST_COL_G, AMETHYST_COL_B);
+            #endif
+            break;
+        case 44037: // magma block
+            #ifdef HARDCODED_MAGMA_COL
+            lightcol = vec3(MAGMA_COL_R, MAGMA_COL_G, MAGMA_COL_B);
+            #endif
+            break;
+        case 44038: // dragon egg
+            #ifdef HARDCODED_DRAGON_COL
+            lightcol = vec3(DRAGON_COL_R, DRAGON_COL_G, DRAGON_COL_B);
+            #endif
+            break;
+        case 44039: // chorus flower
+            #ifdef HARDCODED_CHORUS_COL
+            lightcol = vec3(CHORUS_COL_R, CHORUS_COL_G, CHORUS_COL_B);
+            #endif
+            break;
+        case 44040: // brewing stand
+            #ifdef HARDCODED_BREWINGSTAND_COL
+            lightcol = vec3(BREWINGSTAND_COL_R, BREWINGSTAND_COL_G, BREWINGSTAND_COL_B);
+            #endif
+            break;
+        case 44041: // redstone block
+            #ifdef BLOCK_HARDCODED_REDSTONE_COL
+            lightcol = vec3(REDSTONE_COL_R, REDSTONE_COL_G, REDSTONE_COL_B);
+            #endif
+            break;
+        // End handheld light items
         case 10056: // lava cauldron
             #ifdef CAULDRON_HARDCODED_LAVA_COL
             lightcol = vec3(LAVA_COL_R, LAVA_COL_G, LAVA_COL_B);
@@ -546,6 +675,83 @@ int getLightLevel(int mat) {
                 lightlevel = 20;
             #endif
             break;
+        // Handheld light items (44XXX range) - map to corresponding block brightness
+        case 44002: // torch
+            lightlevel = BRIGHTNESS_TORCH;
+            break;
+        case 44003: // end rod
+            lightlevel = BRIGHTNESS_ENDROD;
+            break;
+        case 44004: // beacon
+            lightlevel = BRIGHTNESS_BEACON;
+            break;
+        case 44007: // ochre froglight
+            lightlevel = BRIGHTNESS_YELLOWFROG;
+            break;
+        case 44008: // verdant froglight
+            lightlevel = BRIGHTNESS_GREENFROG;
+            break;
+        case 44009: // pearlescent froglight
+            lightlevel = BRIGHTNESS_PINKFROG;
+            break;
+        case 44010: // glowstone
+            lightlevel = BRIGHTNESS_GLOWSTONE;
+            break;
+        case 44011: // jack o'lantern
+            lightlevel = BRIGHTNESS_PUMPKIN;
+            break;
+        case 44012: // lantern
+            lightlevel = LANTERN_BRIGHTNESS_TORCH;
+            break;
+        case 44015: // campfire
+            lightlevel = CAMPFIRE_BRIGHTNESS_FIRE;
+            break;
+        case 44018: // sea lantern
+            lightlevel = BRIGHTNESS_SEALANTERN;
+            break;
+        case 44019: // shroomlight
+            lightlevel = BRIGHTNESS_SHROOMLIGHT;
+            break;
+        case 44026: // crying obsidian
+            lightlevel = BRIGHTNESS_CRYING;
+            break;
+        case 44028: // soul torch
+            lightlevel = BRIGHTNESS_SOULTORCH;
+            break;
+        case 44029: // soul lantern
+            lightlevel = LANTERN_BRIGHTNESS_SOULTORCH;
+            break;
+        case 44030: // soul campfire
+            lightlevel = CAMPFIRE_BRIGHTNESS_SOULFIRE;
+            break;
+        case 44033: // enchanting table
+            lightlevel = BRIGHTNESS_TABLE;
+            break;
+        case 44034: // glow lichen
+            lightlevel = BRIGHTNESS_LICHEN;
+            break;
+        case 44035: // redstone torch
+            lightlevel = TORCH_BRIGHTNESS_REDSTONE;
+            break;
+        case 44036: // amethyst buds
+            lightlevel = BRIGHTNESS_AMETHYST;
+            break;
+        case 44037: // magma block
+            lightlevel = BLOCK_BRIGHTNESS_MAGMA;
+            break;
+        case 44038: // dragon egg
+            lightlevel = BRIGHTNESS_DRAGON;
+            break;
+        case 44039: // chorus flower
+            lightlevel = BRIGHTNESS_CHORUS;
+            break;
+        case 44040: // brewing stand
+            lightlevel = BRIGHTNESS_BREWINGSTAND;
+            break;
+        case 44041: // redstone block
+            lightlevel = BLOCK_BRIGHTNESS_REDSTONE;
+            break;
+        // End handheld light items
         case 10056: // lava cauldron
             lightlevel = CAULDRON_BRIGHTNESS_LAVA;
             break;

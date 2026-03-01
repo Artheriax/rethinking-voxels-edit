@@ -181,12 +181,7 @@ void main() {
     int index = int(gl_LocalInvocationID.x + gl_WorkGroupSize.x * gl_LocalInvocationID.y);
     float dither = nextFloat();
     if (index == 0) {
-        #if HELD_LIGHTING_MODE > 0
-            // Reserve index 0 for handheld light
-            lightCount = 1;
-        #else
-            lightCount = 0;
-        #endif
+        lightCount = 0;
         cumulatedPos = ivec4(0);
         cumulatedNormal = ivec4(0);
     }
@@ -197,31 +192,6 @@ void main() {
         lightPositions[index] = vec3(0);
         lightCols[index] = vec3(0);
     }
-    #if HELD_LIGHTING_MODE > 0
-        // Initialize handheld light at index 0 early - before any other registrations
-        if (index == 0) {
-            vec3 playerVxPos = fractCamPos - relativeEyePosition;
-            
-            // Use stable position - snap to center of current voxel for consistency
-            // This prevents flickering when player crosses voxel boundaries
-            vec3 playerLightPos = floor(playerVxPos) + 0.5;
-            
-            // Use torch color settings - these can be customized in shader options
-            vec3 handheldLightCol = vec3(TORCH_COL_R, TORCH_COL_G, TORCH_COL_B);
-            float handheldBrightness = BRIGHTNESS_TORCH;
-            #if HELD_LIGHTING_MODE == 1
-                handheldBrightness *= 0.5;
-            #endif
-            
-            float thisTraceLen = handheldBrightness / 31.0;
-            
-            lightCoords[0] = ivec4(ivec3(playerLightPos), 0);
-            lightPositions[0] = playerLightPos;
-            lightCols[0] = handheldLightCol;
-            extraData[0] = int(handheldBrightness) << 17;
-            weights[0] = length(handheldLightCol) * 1.5 * 1.5 * thisTraceLen * thisTraceLen;
-        }
-    #endif
     barrier();
     memoryBarrierShared();
     ivec2 readTexelCoord
@@ -340,8 +310,18 @@ void main() {
         registerLight(rayHit0Coords, vxPos, normalDepthData.xyz, 0.0);
     }
 
-    // Handheld light is now initialized at index 0 before barrier
-    // No need to search for it with registerLight
+    // Handheld light search - search around player's position
+    #if HELD_LIGHTING_MODE > 0
+        if (index < 125 && (heldBlockLightValue > 0 || heldBlockLightValue2 > 0)) {
+            vec3 playerVxPos = fractCamPos - relativeEyePosition;
+            ivec3 playerVoxelCenter = ivec3(floor(playerVxPos));
+            
+            // Search 5x5x5 area around player position for the handheld light
+            ivec3 offset = ivec3(index%5, index/5%5, index/25%5) - 2;
+            ivec3 lightPos0 = playerVoxelCenter + offset;
+            registerLight(lightPos0, meanPos, meanNormal, 0.0);
+        }
+    #endif
 
     if (index < 8 * MAX_LIGHT_COUNT) {
         ivec2 offset = (1 + index%8/4*3) * (index%4/2*2-1) * ivec2(index%2, (index+1)%2);
