@@ -309,16 +309,10 @@ void main() {
         registerLight(rayHit0Coords, vxPos, normalDepthData.xyz, 0.0);
     }
 
-    #if HELD_LIGHTING_MODE > 0
-        if (index < 125) {
-            // Calculate player's voxel position for handheld lighting
-            vec3 playerVxPos = fractCamPos - relativeEyePosition;
-            ivec3 playerVxCoord = ivec3(playerVxPos + 0.5 * voxelVolumeSize);
-            // Register lights in a 5x5x5 grid around the player
-            ivec3 lightPos0 = playerVxCoord + ivec3(index%5, index/5%5, index/25%5) - 2;
-            registerLight(lightPos0, playerVxPos, vec3(0, 1, 0), 0.0);
-        }
-    #endif
+    if (index < 125) {
+        ivec3 lightPos0 = ivec3(index%5, index/5%5, index/25%5) - 2;
+        registerLight(lightPos0, meanPos, meanNormal, 0.0);
+    }
 
     if (index < 8 * MAX_LIGHT_COUNT) {
         ivec2 offset = (1 + index%8/4*3) * (index%4/2*2-1) * ivec2(index%2, (index+1)%2);

@@ -40,7 +40,12 @@ void main() {
         writeColors[k] = (all(lessThan(prevCoords, voxelVolumeSize)) && all(greaterThanEqual(prevCoords, ivec3(0)))) ? imageLoad(irradianceCacheI, prevCoords + ivec3(0, k * voxelVolumeSize.y, 0)) : vec4(0);
     }
     writeColors[0] *= 0.99; // GI accumulation falloff
-    if (any(isnan(writeColors[0]))) writeColors[0] = vec4(0);
+    // Enhanced NaN/Inf protection
+    if (any(isnan(writeColors[0])) || any(isinf(writeColors[0]))) {
+        writeColors[0] = vec4(0);
+    }
+    // Clamp to reasonable values for stability
+    writeColors[0] = clamp(writeColors[0], vec4(-100.0), vec4(100.0));
     barrier();
     memoryBarrierImage();
     for (int k = 0; k < 2; k++) {
@@ -273,13 +278,8 @@ void main() {
 
     #if HELD_LIGHTING_MODE > 0
         if (index < 125 && anyInFrustrum) {
-            // Calculate player's voxel position for handheld lighting
-            vec3 fractCamPos = cameraPositionInt.y == -98257195 ? fract(cameraPosition) : cameraPositionFract;
-            vec3 playerVxPos = fractCamPos - relativeEyePosition;
-            ivec3 playerVxCoord = ivec3(playerVxPos + 0.5 * voxelVolumeSize);
-            // Register lights in a 5x5x5 grid around the player
-            ivec3 lightPos0 = playerVxCoord + ivec3(index%5, index/5%5, index/25%5) - 2;
-            registerLight(lightPos0, playerVxPos, 0.0);
+            ivec3 lightPos0 = ivec3(index%5, index/5%5, index/25%5) - 2;
+            registerLight(lightPos0, meanPos, 0.0);
         }
     #endif
     barrier();
@@ -552,7 +552,13 @@ void main() {
                     if (all(greaterThanEqual(hitContrib, vec3(0)))) GILight += vec4(hitContrib, 1.0);
                 }
                 GILight += min(ambientContribution, vec4(ambientColor * 2.0, 1.0) * ambientContribution.a);
-                if (any(isnan(GILight))) GILight = vec4(0);
+                // Enhanced NaN/Inf protection with clamping
+                if (any(isnan(GILight)) || any(isinf(GILight))) {
+                    GILight = vec4(0);
+                } else {
+                    // Clamp to reasonable values for stability
+                    GILight = clamp(GILight, vec4(0.0), vec4(10.0));
+                }
                 imageStore(irradianceCacheI, coords, GILight);
             } else {
                 imageStore(irradianceCacheI, coords, vec4(0));
