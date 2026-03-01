@@ -393,7 +393,7 @@ void main() {
                         rayHit1.w *
                         distanceFalloff(dirLen / (thisTraceLen * LIGHT_TRACE_LENGTH)) *
                         lightBrightness;
-                    if (!any(isnan(thisBaseCol)) && !isnan(ndotl0)) {
+                    if (!any(isnan(thisBaseCol)) && !any(isinf(thisBaseCol)) && !isnan(ndotl0) && !isinf(ndotl0)) {
                         writeColor += thisBaseCol * ndotl0;
                         #ifdef BLOCKLIGHT_HIGHLIGHT
 
@@ -404,7 +404,7 @@ void main() {
                                 ndotl0,
                                 smoothness
                             );
-                            if (!isnan(specularBrightness)) {
+                            if (!isnan(specularBrightness) && !isinf(specularBrightness)) {
                                 writeSpecular += thisBaseCol * lightBrightness * specularBrightness;
                             }
                         #endif

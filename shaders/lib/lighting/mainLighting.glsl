@@ -646,11 +646,25 @@ void DoLighting(inout vec4 color, inout vec3 shadowMult, vec3 playerPos, vec3 vi
     // Mix Colors
     vec3 finalDiffuse = pow2(directionShade * vanillaAO) * (blockLighting + pow2(sceneLighting) + minLighting) + pow2(emission);
     finalDiffuse = sqrt(max(finalDiffuse, vec3(0.0))); // sqrt() for a bit more realistic light mix, max() to prevent NaNs
-    if (any(isnan(finalDiffuse))) finalDiffuse = vec3(0.0);
+    
+    // Enhanced NaN/Inf protection with component-wise check
+    if (any(isnan(finalDiffuse)) || any(isinf(finalDiffuse))) {
+        finalDiffuse = vec3(0.0);
+    }
+    
+    // Ensure non-negative values for stability
+    finalDiffuse = max(finalDiffuse, vec3(0.0));
+    
     // Apply Lighting
     color.rgb *= finalDiffuse;
     color.rgb += lightHighlight;
     color.rgb *= pow2(1.0 - darknessLightFactor);
+    
+    // Final color validation
+    if (any(isnan(color.rgb)) || any(isinf(color.rgb))) {
+        color.rgb = vec3(0.0);
+    }
+    
     #ifdef WHITE_WORLD
     color.rgb = finalDiffuse + lightHighlight;
     #endif

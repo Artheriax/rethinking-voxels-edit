@@ -67,6 +67,19 @@ vec3 ClipAABB(vec3 q, vec3 aabb_min, vec3 aabb_max){
         return q;
 }
 
+// Enhanced variance clipping for better anti-aliasing of high-frequency details
+vec3 VarianceClip(vec3 color, vec3 minColor, vec3 maxColor, float varianceFactor) {
+    // Calculate color variance for adaptive clipping
+    vec3 colorRange = maxColor - minColor;
+    float avgRange = (colorRange.r + colorRange.g + colorRange.b) / 3.0;
+    
+    // Expand AABB slightly for high-variance regions
+    vec3 expandedMin = minColor - varianceFactor * colorRange;
+    vec3 expandedMax = maxColor + varianceFactor * colorRange;
+    
+    return clamp(color, expandedMin, expandedMax);
+}
+
 ivec2 neighbourhoodOffsets[8] = ivec2[8](
     ivec2( 1, 1),
     ivec2( 1,-1),
@@ -81,6 +94,8 @@ ivec2 neighbourhoodOffsets[8] = ivec2[8](
 void NeighbourhoodClamping(vec3 color, inout vec3 tempColor, float z0, float z1, inout float edge) {
     vec3 minclr = color;
     vec3 maxclr = minclr;
+    vec3 colorSum = color;
+    vec3 colorSqSum = color * color;
 
     int cc = 2;
     ivec2 texelCoordM1 = clamp(texelCoord, ivec2(cc), ivec2(view) - cc); // Fixes screen edges
@@ -98,8 +113,17 @@ void NeighbourhoodClamping(vec3 color, inout vec3 tempColor, float z0, float z1,
 
         vec3 clr = texelFetch(colortex3, texelCoordM2, 0).rgb;
         minclr = min(minclr, clr); maxclr = max(maxclr, clr);
+        colorSum += clr;
+        colorSqSum += clr * clr;
     }
 
+    // Enhanced variance clipping
+    vec3 avgColor = colorSum / 9.0;
+    vec3 variance = max(colorSqSum / 9.0 - avgColor * avgColor, vec3(0.0));
+    float varianceAmount = length(variance) * 0.5;
+    
+    // Apply variance-based clipping for better high-frequency detail preservation
+    tempColor = VarianceClip(tempColor, minclr, maxclr, varianceAmount * 0.1);
     tempColor = ClipAABB(tempColor, minclr, maxclr);
 }
 
@@ -165,12 +189,27 @@ void DoTAA(inout vec3 color, inout vec3 temp, float z1) {
     #endif
 
     vec2 velocity = (texCoord - prvCoord.xy) * view;
-    float blendFactor = float(prvCoord.x > 0.0 && prvCoord.x < 1.0 &&
-                              prvCoord.y > 0.0 && prvCoord.y < 1.0);
+    float blendFactor = float(prvCoord.x > 0.0 && prvCoord.x < 1.0 && prvCoord.y > 0.0 && prvCoord.y < 1.0);
     float velocityFactor = dot(velocity, velocity) * 10.0;
     blendFactor *= max(exp(-velocityFactor) * blendVariable + blendConstant - length(cameraPosition - previousCameraPosition) * edge, blendMinimum);
 
     color = mix(color, tempColor, blendFactor);
+    
+    // Post-TAA sharpening to recover detail lost during temporal blending
+    // Uses a simple unsharp mask approach
+    float sharpenStrength = 0.1 * (1.0 - blendFactor); // Sharpen more when blend is lower
+    vec3 blurred = vec3(0.0);
+    for (int i = 0; i < 8; i++) {
+        blurred += texelFetch(colortex3, texelCoord + neighbourhoodOffsets[i], 0).rgb;
+    }
+    blurred /= 8.0;
+    color += sharpenStrength * (color - blurred);
+    
+    // Final NaN/Inf protection
+    if (any(isnan(color)) || any(isinf(color))) {
+        color = texelFetch(colortex3, texelCoord, 0).rgb;
+    }
+    
     temp = color;
 
     //if (edge > 0.05) color.rgb = vec3(1.0, 0.0, 1.0);

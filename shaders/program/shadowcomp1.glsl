@@ -40,7 +40,12 @@ void main() {
         writeColors[k] = (all(lessThan(prevCoords, voxelVolumeSize)) && all(greaterThanEqual(prevCoords, ivec3(0)))) ? imageLoad(irradianceCacheI, prevCoords + ivec3(0, k * voxelVolumeSize.y, 0)) : vec4(0);
     }
     writeColors[0] *= 0.99; // GI accumulation falloff
-    if (any(isnan(writeColors[0]))) writeColors[0] = vec4(0);
+    // Enhanced NaN/Inf protection
+    if (any(isnan(writeColors[0])) || any(isinf(writeColors[0]))) {
+        writeColors[0] = vec4(0);
+    }
+    // Clamp to reasonable values for stability
+    writeColors[0] = clamp(writeColors[0], vec4(-100.0), vec4(100.0));
     barrier();
     memoryBarrierImage();
     for (int k = 0; k < 2; k++) {
@@ -482,7 +487,10 @@ void main() {
                 maxDFVal = max(max(dplus, dminus), maxDFVal);
             }
             normal = normalize(normal);
-            if (any(isnan(normal))) normal = vec3(0);
+            // Enhanced NaN/Inf protection for normal
+            if (any(isnan(normal)) || any(isinf(normal)) || length(normal) < 0.5) {
+                normal = vec3(0);
+            }
             if (maxDFVal > 0.1 && length(normal) > 0.5) {
                 vec4 GILight = imageLoad(irradianceCacheI, coords);
                 float weight = 1.0;
@@ -544,7 +552,13 @@ void main() {
                     if (all(greaterThanEqual(hitContrib, vec3(0)))) GILight += vec4(hitContrib, 1.0);
                 }
                 GILight += min(ambientContribution, vec4(ambientColor * 2.0, 1.0) * ambientContribution.a);
-                if (any(isnan(GILight))) GILight = vec4(0);
+                // Enhanced NaN/Inf protection with clamping
+                if (any(isnan(GILight)) || any(isinf(GILight))) {
+                    GILight = vec4(0);
+                } else {
+                    // Clamp to reasonable values for stability
+                    GILight = clamp(GILight, vec4(0.0), vec4(10.0));
+                }
                 imageStore(irradianceCacheI, coords, GILight);
             } else {
                 imageStore(irradianceCacheI, coords, vec4(0));

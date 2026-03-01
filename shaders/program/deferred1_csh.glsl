@@ -120,7 +120,12 @@ void main() {
         vec4 reflection = GetReflection(normalM, viewPos.xyz, nViewPos, playerPos, lViewPos, z0,
                                         depthtex0, dither, skyLightFactor, fresnel,
                                         smoothnessD, vec3(0.0), vec3(0.0), vec3(0.0), 0.0);
-        if (any(isnan(reflection))) reflection = vec4(0);
+        // Enhanced NaN/Inf protection for reflection
+        if (any(isnan(reflection)) || any(isinf(reflection))) {
+            reflection = vec4(0.0);
+        }
+        // Clamp reflection values to reasonable range
+        reflection = clamp(reflection, vec4(0.0), vec4(100.0));
         imageStore(
             colorimg10,
             coord / 2,

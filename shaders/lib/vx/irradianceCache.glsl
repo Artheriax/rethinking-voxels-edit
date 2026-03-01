@@ -9,6 +9,17 @@ bool isInRange(vec3 vxPos) {
 
 uniform sampler3D irradianceCache;
 
+// Helper: Safe division with epsilon protection
+vec3 safeDivide(vec3 numerator, float denominator) {
+    float safeDenom = max(denominator, 0.0001);
+    vec3 result = numerator / safeDenom;
+    // NaN/Inf protection
+    if (any(isnan(result)) || any(isinf(result))) {
+        return vec3(0);
+    }
+    return result;
+}
+
 vec3 readIrradianceCache(vec3 vxPos, vec3 normal) {
     // Early exit for out-of-range positions
     if (!isInRange(vxPos)) return vec3(0);
@@ -16,7 +27,7 @@ vec3 readIrradianceCache(vec3 vxPos, vec3 normal) {
     // Optimized: Combined coordinate calculation
     vec3 samplePos = ((vxPos + 0.5 * normal) / voxelVolumeSize + 0.5) * vec3(1.0, 0.5, 1.0);
     vec4 color = textureLod(irradianceCache, samplePos, 0);
-    return color.rgb / max(color.a, 0.0001);
+    return safeDivide(color.rgb, color.a);
 }
 
 vec3 readSurfaceVoxelBlocklight(vec3 vxPos, vec3 normal) {
@@ -32,6 +43,11 @@ vec3 readSurfaceVoxelBlocklight(vec3 vxPos, vec3 normal) {
     if (lColor > 0.01) {
         color.rgb *= log(lColor + 1.0) / lColor;
     }
+    
+    // NaN/Inf protection
+    if (any(isnan(color.rgb)) || any(isinf(color.rgb))) {
+        return vec3(0);
+    }
     return color.rgb;
 }
 
@@ -42,6 +58,6 @@ vec3 readVolumetricBlocklight(vec3 vxPos) {
     // Optimized: Direct coordinate calculation for volumetric reading
     vec3 samplePos = (vxPos / voxelVolumeSize + vec3(0.5, 1.5, 0.5)) * vec3(1.0, 0.5, 1.0);
     vec4 color = textureLod(irradianceCache, samplePos, 0);
-    return color.rgb / max(color.a, 0.0001);
+    return safeDivide(color.rgb, color.a);
 }
 #endif

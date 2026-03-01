@@ -173,16 +173,43 @@ vec4 GetReflection(vec3 normalM, vec3 viewPos, vec3 nViewPos, vec3 playerPos, fl
         vec3 fractCamPos = cameraPositionInt.y == -98257195 ? fract(cameraPosition) : cameraPositionFract;
         // Step 2.5: fill missing reflections with voxel data
         if (reflection.a < 1.0 ) {
+            // Importance sampling: adjust reflection ray based on roughness
+            // Higher roughness = more random deviation from perfect reflection
+            float roughness = 1.0 - smoothness;
+            vec3 importanceBias = vec3(0.0);
+            #ifdef ROUGH_REFLECTIONS
+            if (roughness > 0.1) {
+                // Apply importance sampling for rough surfaces
+                importanceBias = roughness * 0.3 * vec3(
+                    dither - 0.5,
+                    fract(dither * goldenRatio) - 0.5,
+                    fract(dither * goldenRatio * goldenRatio) - 0.5
+                );
+            }
+            #endif
+            
             vec3 voxelVector = mat3(gbufferModelViewInverse) * reflect(nViewPos, normalize(normalMR));
+            voxelVector = normalize(voxelVector + importanceBias);
+            
             vec4 voxelStart = gbufferModelViewInverse * vec4(start, 1.0);
             voxelStart.xyz += fractCamPos;
             vec3 hitPos = rayTrace(voxelStart.xyz + 0.1 * voxelVector, 50.0 * voxelVector, dither);
-            if (length(voxelStart.xyz - hitPos) < 49.0 && getDistanceField(hitPos) < 0.1) {
+            
+            // Validate hit position
+            float hitDistance = length(voxelStart.xyz - hitPos);
+            if (hitDistance < 49.0 && getDistanceField(hitPos) < 0.1) {
                 // do lighting on the reflected surface
-                vec3 hitNormal = normalize(distanceFieldGradient(hitPos) + vec3(0.000001, -0.0000041, 0.0000003));
-                if (any(isnan(hitNormal))) hitNormal = -voxelVector;
+                vec3 rawGradient = distanceFieldGradient(hitPos) + vec3(0.000001, -0.0000041, 0.0000003);
+                vec3 hitNormal = normalize(rawGradient);
+                
+                // Enhanced NaN/Inf protection for normal
+                if (any(isnan(hitNormal)) || any(isinf(hitNormal)) || length(rawGradient) < 0.0001) {
+                    hitNormal = -voxelVector;
+                }
+                
                 int occupancyData = imageLoad(occupancyVolume, ivec3(hitPos + 0.5 * voxelVolumeSize - 0.1 * hitNormal)).r;
                 vec4 voxelCol = getColor(hitPos - 0.1 * hitNormal);
+                
                 #if defined REALTIME_SHADOWS && defined OVERWORLD
                     vec3 shadowHitPos = GetShadowPos(hitPos - fractCamPos + 0.2 * hitNormal);
                 #endif
@@ -205,7 +232,9 @@ vec4 GetReflection(vec3 normalM, vec3 viewPos, vec3 nViewPos, vec3 playerPos, fl
                 vec3 playerHitPos = hitPos - fractCamPos;
                 float skyFade = 0.0;
                 DoFog(voxelCol.rgb, skyFade, length(playerHitPos), playerHitPos, RVdotU, RVdotS, dither);
-                if (!any(isnan(reflection))) {
+                
+                // Validate voxel color before blending
+                if (!any(isnan(voxelCol)) && !any(isinf(voxelCol))) {
                     reflection.rgb = mix(voxelCol.rgb, reflection.rgb, reflection.a);
                     reflection.a += (1.0 - reflection.a) * voxelCol.a;
                 }
